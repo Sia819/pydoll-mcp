@@ -10,6 +10,7 @@ This module provides MCP tools for capturing screenshots and generating media in
 import base64
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Sequence
 

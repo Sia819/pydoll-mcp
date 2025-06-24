@@ -314,7 +314,8 @@ async def handle_list_browsers(arguments: Dict[str, Any]) -> Sequence[TextConten
         browser_manager = get_browser_manager()
         include_stats = arguments.get("include_stats", True)
         
-        browsers = await browser_manager.get_active_browsers()
+        # PyDoll doesn't have async get_active_browsers, use browsers dict directly
+        browsers = browser_manager.browsers
         browser_list = []
         
         for browser_id, instance in browsers.items():
