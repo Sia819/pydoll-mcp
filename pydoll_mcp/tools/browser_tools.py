@@ -333,13 +333,28 @@ async def handle_list_browsers(arguments: Dict[str, Any]) -> Sequence[TextConten
             
             browser_list.append(browser_info)
         
+        # Calculate global stats if requested
+        global_stats = None
+        if include_stats:
+            total_tabs = sum(len(browser_data["tabs"]) for browser_data in browser_list)
+            global_stats = {
+                "total_browsers": len(browsers),
+                "total_tabs": total_tabs,
+                "active_browsers": sum(1 for b in browser_list if b["is_active"]),
+                "browser_types": {}
+            }
+            # Count browser types
+            for browser_data in browser_list:
+                browser_type = browser_data["browser_type"]
+                global_stats["browser_types"][browser_type] = global_stats["browser_types"].get(browser_type, 0) + 1
+        
         result = OperationResult(
             success=True,
             message=f"Found {len(browsers)} active browsers",
             data={
                 "browsers": browser_list,
                 "count": len(browsers),
-                "global_stats": browser_manager.get_global_stats() if include_stats else None
+                "global_stats": global_stats
             }
         )
         

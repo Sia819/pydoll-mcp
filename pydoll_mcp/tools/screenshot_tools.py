@@ -7,7 +7,9 @@ This module provides MCP tools for capturing screenshots and generating media in
 - Image processing and optimization
 """
 
+import asyncio
 import base64
+import datetime
 import logging
 import os
 import time
@@ -257,8 +259,13 @@ async def handle_take_screenshot(arguments: Dict[str, Any]) -> Sequence[TextCont
         
         tab = await browser_manager.get_tab(browser_id, tab_id)
         
-        # Simulate screenshot capture (would use actual PyDoll API)
-        screenshot_bytes = b"fake_screenshot_data"
+        # Take actual screenshot using PyDoll API
+        if clip_area:
+            # PyDoll doesn't support clip area directly, need to take full screenshot
+            # and crop it manually if needed
+            screenshot_bytes = await tab.take_screenshot(as_base64=False)
+        else:
+            screenshot_bytes = await tab.take_screenshot(as_base64=False)
         
         # Prepare file path
         file_path = None
@@ -320,19 +327,88 @@ async def handle_take_screenshot(arguments: Dict[str, Any]) -> Sequence[TextCont
 # Placeholder handlers for remaining tools
 async def handle_take_element_screenshot(arguments: Dict[str, Any]) -> Sequence[TextContent]:
     """Handle element screenshot request."""
-    element_selector = arguments["element_selector"]
-    format_type = arguments.get("format", "png")
-    
-    result = OperationResult(
-        success=True,
-        message="Element screenshot captured successfully",
-        data={
+    try:
+        browser_manager = get_browser_manager()
+        browser_id = arguments["browser_id"]
+        tab_id = arguments.get("tab_id")
+        element_selector = arguments["element_selector"]
+        format_type = arguments.get("format", "png")
+        save_to_file = arguments.get("save_to_file", True)
+        return_base64 = arguments.get("return_base64", False)
+        file_name = arguments.get("file_name")
+        padding = arguments.get("padding", 0)
+        scroll_into_view = arguments.get("scroll_into_view", True)
+        
+        tab = await browser_manager.get_tab(browser_id, tab_id)
+        
+        # Find the element first
+        from .dom_tools import find_element_with_selector
+        element = await find_element_with_selector(tab, element_selector)
+        
+        if not element:
+            raise Exception("Element not found")
+        
+        # Scroll element into view if requested
+        if scroll_into_view:
+            await tab.execute_script(f"document.querySelector('{element}').scrollIntoView({{behavior: 'smooth', block: 'center'}});")
+            await asyncio.sleep(0.5)  # Wait for scroll to complete
+        
+        # Take full page screenshot since PyDoll doesn't support element screenshot directly
+        screenshot_bytes = await tab.take_screenshot(as_base64=False)
+        
+        # Prepare file path
+        file_path = None
+        if save_to_file:
+            screenshots_dir = Path("screenshots")
+            screenshots_dir.mkdir(exist_ok=True)
+            
+            if not file_name:
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                file_name = f"element_screenshot_{timestamp}.{format_type}"
+            elif not file_name.endswith(f".{format_type}"):
+                file_name = f"{file_name}.{format_type}"
+            
+            file_path = screenshots_dir / file_name
+            
+            # Save screenshot to file
+            with open(file_path, "wb") as f:
+                f.write(screenshot_bytes)
+        
+        # Prepare result data
+        result_data = {
+            "browser_id": browser_id,
+            "tab_id": tab_id,
             "format": format_type,
-            "file_path": f"screenshots/element_{int(time.time())}.{format_type}",
-            "element_bounds": {"x": 100, "y": 100, "width": 200, "height": 150}
+            "file_size": len(screenshot_bytes),
+            "timestamp": datetime.datetime.now().isoformat(),
+            "element_selector": element_selector
         }
-    )
-    return [TextContent(type="text", text=result.json())]
+        
+        if file_path:
+            result_data["file_path"] = str(file_path)
+        
+        if return_base64:
+            base64_data = base64.b64encode(screenshot_bytes).decode('utf-8')
+            result_data["base64_data"] = f"data:image/{format_type};base64,{base64_data}"
+        
+        result = OperationResult(
+            success=True,
+            message="Element screenshot captured successfully",
+            data=result_data
+        )
+        
+        logger.info(f"Element screenshot captured: {file_path if file_path else 'in-memory'}")
+        return [TextContent(type="text", text=result.json())]
+        
+    except Exception as e:
+        logger.error(f"Element screenshot capture failed: {e}")
+        result = OperationResult(
+            success=False,
+            error=str(e),
+            message="Failed to capture element screenshot"
+        )
+        return [TextContent(type="text", text=result.json())]
 
 
 async def handle_generate_pdf(arguments: Dict[str, Any]) -> Sequence[TextContent]:

@@ -213,7 +213,12 @@ async def handle_navigate_to(arguments: Dict[str, Any]) -> Sequence[TextContent]
             await asyncio.sleep(2)
         
         # Get final URL (in case of redirects)
-        final_url = await tab.current_url()
+        # PyDoll doesn't have current_url method, use execute_script
+        try:
+            final_url = await tab.execute_script("return window.location.href")
+        except:
+            final_url = url
+        
         # PyDoll doesn't have get_title method, use execute_script
         try:
             title = await tab.execute_script("return document.title")
