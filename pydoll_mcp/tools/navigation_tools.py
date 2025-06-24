@@ -7,6 +7,7 @@ This module provides MCP tools for page navigation and URL management including:
 - Wait conditions and load detection
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, Sequence
 from urllib.parse import urlparse
@@ -203,17 +204,13 @@ async def handle_navigate_to(arguments: Dict[str, Any]) -> Sequence[TextContent]
         # Get tab
         tab = await browser_manager.get_tab(browser_id, tab_id)
         
-        # Navigate with options
-        navigation_options = {
-            "timeout": timeout * 1000,  # Convert to milliseconds
-            "waitUntil": "load" if wait_for_load else "domcontentloaded"
-        }
+        # PyDoll's go_to method doesn't support these options
+        # Simply navigate to the URL
+        await tab.go_to(url)
         
-        if referrer:
-            navigation_options["referer"] = referrer
-        
-        # Perform navigation
-        await tab.go_to(url, **navigation_options)
+        # If wait_for_load is True, wait a bit for the page to load
+        if wait_for_load:
+            await asyncio.sleep(2)
         
         # Get final URL (in case of redirects)
         final_url = await tab.get_url()

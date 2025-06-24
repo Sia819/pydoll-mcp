@@ -164,13 +164,17 @@ class BrowserManager:
         # Stealth and performance options
         if os.getenv("PYDOLL_STEALTH_MODE", "true").lower() == "true":
             options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option('useAutomationExtension', False)
+            # PyDoll doesn't support add_experimental_option
+            # options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            # options.add_experimental_option('useAutomationExtension', False)
         
         # Performance optimizations
         if os.getenv("PYDOLL_DISABLE_IMAGES", "false").lower() == "true":
-            prefs = {"profile.managed_default_content_settings.images": 2}
-            options.add_experimental_option("prefs", prefs)
+            # PyDoll doesn't support add_experimental_option
+            # prefs = {"profile.managed_default_content_settings.images": 2}
+            # options.add_experimental_option("prefs", prefs)
+            # Alternative: use command line argument
+            options.add_argument("--disable-images")
         
         # Proxy configuration
         proxy_server = kwargs.get("proxy", os.getenv("PYDOLL_PROXY_SERVER"))

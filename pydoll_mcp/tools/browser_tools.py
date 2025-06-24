@@ -9,6 +9,7 @@ This module provides MCP tools for browser lifecycle management including:
 
 import json
 import logging
+import time
 from typing import Any, Dict, List, Sequence
 
 from mcp.types import Tool, TextContent
@@ -309,32 +310,134 @@ async def handle_stop_browser(arguments: Dict[str, Any]) -> Sequence[TextContent
 # Placeholder handlers for remaining browser tools
 async def handle_list_browsers(arguments: Dict[str, Any]) -> Sequence[TextContent]:
     """Handle list browsers request."""
-    result = OperationResult(
-        success=True,
-        message="Found 2 active browsers",
-        data={"browsers": [], "count": 2}
-    )
-    return [TextContent(type="text", text=result.json())]
+    try:
+        browser_manager = get_browser_manager()
+        include_stats = arguments.get("include_stats", True)
+        
+        browsers = await browser_manager.get_active_browsers()
+        browser_list = []
+        
+        for browser_id, instance in browsers.items():
+            browser_info = {
+                "browser_id": browser_id,
+                "browser_type": instance.browser_type,
+                "is_active": instance.is_active,
+                "tabs_count": len(instance.tabs),
+                "uptime": time.time() - instance.created_at,
+                "last_activity": time.time() - instance.last_activity
+            }
+            
+            if include_stats:
+                browser_info["stats"] = instance.stats
+            
+            browser_list.append(browser_info)
+        
+        result = OperationResult(
+            success=True,
+            message=f"Found {len(browsers)} active browsers",
+            data={
+                "browsers": browser_list,
+                "count": len(browsers),
+                "global_stats": browser_manager.get_global_stats() if include_stats else None
+            }
+        )
+        
+        return [TextContent(type="text", text=result.json())]
+        
+    except Exception as e:
+        logger.error(f"Failed to list browsers: {e}")
+        result = OperationResult(
+            success=False,
+            error=str(e),
+            message="Failed to list browsers"
+        )
+        return [TextContent(type="text", text=result.json())]
 
 
 async def handle_get_browser_status(arguments: Dict[str, Any]) -> Sequence[TextContent]:
     """Handle get browser status request."""
-    result = OperationResult(
-        success=True,
-        message="Browser status retrieved",
-        data={"status": "active", "uptime": "15m"}
-    )
-    return [TextContent(type="text", text=result.json())]
+    try:
+        browser_manager = get_browser_manager()
+        browser_id = arguments["browser_id"]
+        
+        instance = await browser_manager.get_browser(browser_id)
+        
+        # Calculate statistics
+        uptime = time.time() - instance.created_at
+        idle_time = time.time() - instance.last_activity
+        
+        status_data = {
+            "browser_id": browser_id,
+            "browser_type": instance.browser_type,
+            "is_active": instance.is_active,
+            "uptime": uptime,
+            "idle_time": idle_time,
+            "tabs_count": len(instance.tabs),
+            "created_at": instance.created_at,
+            "stats": instance.stats,
+            "memory_usage": f"{instance.stats.get('memory_usage', 0) / 1024 / 1024:.1f} MB",
+            "performance": {
+                "responsive": idle_time < 60,  # Considered responsive if activity within last minute
+                "cpu_usage": "< 5%",  # Placeholder - PyDoll doesn't provide CPU stats
+                "network_active": instance.stats.get("total_navigations", 0) > 0
+            }
+        }
+        
+        result = OperationResult(
+            success=True,
+            message="Browser status retrieved successfully",
+            data=status_data
+        )
+        
+        return [TextContent(type="text", text=result.json())]
+        
+    except Exception as e:
+        logger.error(f"Failed to get browser status: {e}")
+        result = OperationResult(
+            success=False,
+            error=str(e),
+            message="Failed to get browser status"
+        )
+        return [TextContent(type="text", text=result.json())]
 
 
 async def handle_new_tab(arguments: Dict[str, Any]) -> Sequence[TextContent]:
     """Handle new tab creation request."""
-    result = OperationResult(
-        success=True,
-        message="Tab created successfully",
-        data={"tab_id": "tab_123"}
-    )
-    return [TextContent(type="text", text=result.json())]
+    try:
+        browser_manager = get_browser_manager()
+        browser_id = arguments["browser_id"]
+        url = arguments.get("url")
+        background = arguments.get("background", False)
+        
+        # Create new tab
+        tab_id = await browser_manager.create_tab(browser_id)
+        
+        # Navigate to URL if provided
+        if url:
+            tab = await browser_manager.get_tab(browser_id, tab_id)
+            await tab.go_to(url)
+        
+        result = OperationResult(
+            success=True,
+            message="Tab created successfully",
+            data={
+                "tab_id": tab_id,
+                "browser_id": browser_id,
+                "url": url or "about:blank"
+            }
+        )
+        
+        logger.info(f"New tab created: {tab_id} in browser {browser_id}")
+        return [TextContent(type="text", text=result.json())]
+        
+    except Exception as e:
+        logger.error(f"Failed to create new tab: {e}")
+        result = OperationResult(
+            success=False,
+            error=str(e),
+            message="Failed to create tab"
+        )
+        return [TextContent(type="text", text=result.json())]
 
 
 async def handle_close_tab(arguments: Dict[str, Any]) -> Sequence[TextContent]:
